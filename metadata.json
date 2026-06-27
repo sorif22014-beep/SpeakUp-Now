@@ -1,0 +1,6 @@
+{
+  "name": "Atmospheric Live",
+  "description": "A high-fidelity glassmorphic live streaming and virtual lounge experience with rich user-level progression, interactive gifting, real-time chat simulations, and a live webcam streamer suite.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
