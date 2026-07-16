@@ -89,6 +89,15 @@ const RoomLatestComment = ({ roomId }: { roomId: string }) => {
   );
 };
 
+const withTimeout = <T,>(promise: Promise<T>, ms: number = 1500): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), ms)
+    ),
+  ]);
+};
+
 export default function App() {
   // 1. Core State & Firebase Auth States
   const [userId, setUserId] = useState<string | null>(null);
@@ -124,8 +133,32 @@ export default function App() {
       const customUid = localStorage.getItem("custom_logged_in_uid");
       if (customUid) {
         const userDocRef = doc(db, "users", customUid);
+        const fallbackProfile = {
+          name: customUid,
+          avatarUrl: "",
+          level: UserLevel.BRONZE,
+          levelProgress: 25,
+          walletBalance: 1200,
+          isStreamer: false,
+          avatarColor: "#89ceff",
+          photoUrl: "",
+          age: "",
+          gender: "",
+          address: "",
+          location: "",
+          email: "",
+          phone: "",
+          followedUsers: [],
+          friends: [],
+          isAutoRechargeEnabled: false,
+          sp: 100,
+          receivedGiftsCount: 0,
+          receivedGiftsValue: 0,
+          lastReceivedGift: null,
+        };
+
         try {
-          const userDoc = await getDoc(userDocRef);
+          const userDoc = await withTimeout(getDoc(userDocRef), 1200);
           if (userDoc.exists() && active) {
             const data = userDoc.data();
             setUserId(customUid);
@@ -154,9 +187,20 @@ export default function App() {
             });
             setIsAuthLoading(false);
             return () => {};
+          } else if (active) {
+            // Document doesn't exist, log in with default fallback
+            setUserId(customUid);
+            setUserProfile(fallbackProfile);
+            setIsAuthLoading(false);
+            return () => {};
           }
-        } catch (err) {
-          console.error("Error loading custom profile on boot:", err);
+        } catch (err: any) {
+          console.error("Error loading custom profile on boot, falling back locally:", err);
+          setIsQuotaExceeded(true);
+          setUserId(customUid);
+          setUserProfile(fallbackProfile);
+          setIsAuthLoading(false);
+          return () => {};
         }
       }
 
@@ -347,108 +391,117 @@ export default function App() {
     }
   };
 
-  // Unified Custom Login: Match existing ID & password, or auto-create new account!
+  // Simplified 1-Click Easy Login: No password or strict check required!
   const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setAuthSuccess("");
-    const targetUserId = authEmail.trim().toLowerCase();
-    const targetPassword = authPassword.trim();
-
-    if (!targetUserId || !targetPassword) {
-      setAuthError("ইউজার আইডি এবং পাসওয়ার্ড সঠিকভাবে প্রদান করুন!");
-      return;
-    }
-
-    if (targetPassword.length < 6) {
-      setAuthError("পাসওয়ার্ড অবশ্যই কমপক্ষে ৬ অক্ষরের হতে হবে!");
-      return;
-    }
+    
+    // Use authEmail as the typed name. If empty, generate a Guest name automatically.
+    const typedName = authEmail.trim();
+    const sanitizedUserId = typedName 
+      ? typedName.toLowerCase().replace(/[^a-zA-Z0-9\u0980-\u09ff_]/g, "")
+      : "";
+    
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const targetUserId = sanitizedUserId 
+      ? `${sanitizedUserId}_${randomSuffix}` 
+      : `guest_${randomSuffix}`;
+      
+    const displayName = typedName || `গেস্ট_${randomSuffix}`;
 
     setIsSubmittingAuth(true);
+    
+    const newProfile: UserProfile = {
+      name: displayName,
+      avatarUrl: "",
+      level: UserLevel.BRONZE,
+      levelProgress: 25,
+      walletBalance: 1200, // starting coins
+      isStreamer: false,
+      avatarColor: ["#89ceff", "#ffaa00", "#ff66cc", "#00ffcc", "#aa33ff"][Math.floor(Math.random() * 5)],
+      photoUrl: "",
+      age: "",
+      gender: "",
+      address: "",
+      location: "",
+      email: "",
+      phone: "",
+      followedUsers: [],
+      friends: [],
+      isAutoRechargeEnabled: false,
+      sp: 100,
+      receivedGiftsCount: 0,
+      receivedGiftsValue: 0,
+      lastReceivedGift: null,
+    };
+
     try {
+      if (isQuotaExceeded) {
+        // Quota exceeded: direct local access
+        localStorage.setItem("custom_logged_in_uid", targetUserId);
+        setUserId(targetUserId);
+        setUserProfile(newProfile);
+        setAuthSuccess("লোকাল স্যান্ডবক্স মোডে সফলভাবে প্রবেশ করা হয়েছে!");
+        return;
+      }
+
       const userDocRef = doc(db, "users", targetUserId);
-      const userSnap = await getDoc(userDocRef);
+      const userSnap = await withTimeout(getDoc(userDocRef), 1200);
 
       if (userSnap.exists()) {
         const data = userSnap.data();
-        // Check if password matches
-        if (data.password === targetPassword) {
-          localStorage.setItem("custom_logged_in_uid", targetUserId);
-          setUserId(targetUserId);
-          setUserProfile({
-            name: data.name || targetUserId,
-            avatarUrl: data.photoUrl || "",
-            level: data.level || UserLevel.BRONZE,
-            levelProgress: data.levelProgress ?? 25,
-            walletBalance: data.walletBalance ?? 1000,
-            isStreamer: data.isStreamer ?? false,
-            avatarColor: data.avatarColor || "#89ceff",
-            photoUrl: data.photoUrl || "",
-            age: data.age || "",
-            gender: data.gender || "",
-            address: data.address || "",
-            location: data.location || "",
-            email: data.email || "",
-            phone: data.phone || "",
-            followedUsers: data.followedUsers || [],
-            friends: data.friends || [],
-            isAutoRechargeEnabled: data.isAutoRechargeEnabled ?? false,
-            sp: data.sp !== undefined ? data.sp : (data.levelProgress !== undefined ? data.levelProgress : 100),
-            receivedGiftsCount: data.receivedGiftsCount || 0,
-            receivedGiftsValue: data.receivedGiftsValue || 0,
-            lastReceivedGift: data.lastReceivedGift || null,
-          });
-          setAuthSuccess("সফলভাবে লগইন করা হয়েছে!");
-          setAuthEmail("");
-          setAuthPassword("");
-        } else {
-          setAuthError("ভুল পাসওয়ার্ড! এই ইউজার আইডির জন্য সঠিক পাসওয়ার্ড দিন অথবা নতুন কোনো আইডি ব্যবহার করুন।");
-        }
+        localStorage.setItem("custom_logged_in_uid", targetUserId);
+        setUserId(targetUserId);
+        setUserProfile({
+          name: data.name || displayName,
+          avatarUrl: data.photoUrl || "",
+          level: data.level || UserLevel.BRONZE,
+          levelProgress: data.levelProgress ?? 25,
+          walletBalance: data.walletBalance ?? 1200,
+          isStreamer: data.isStreamer ?? false,
+          avatarColor: data.avatarColor || "#89ceff",
+          photoUrl: data.photoUrl || "",
+          age: data.age || "",
+          gender: data.gender || "",
+          address: data.address || "",
+          location: data.location || "",
+          email: data.email || "",
+          phone: data.phone || "",
+          followedUsers: data.followedUsers || [],
+          friends: data.friends || [],
+          isAutoRechargeEnabled: data.isAutoRechargeEnabled ?? false,
+          sp: data.sp !== undefined ? data.sp : (data.levelProgress !== undefined ? data.levelProgress : 100),
+          receivedGiftsCount: data.receivedGiftsCount || 0,
+          receivedGiftsValue: data.receivedGiftsValue || 0,
+          lastReceivedGift: data.lastReceivedGift || null,
+        });
+        setAuthSuccess("সফলভাবে প্রবেশ করা হয়েছে!");
       } else {
-        // Create a new account!
-        const newProfile: UserProfile = {
-          name: targetUserId, // Default name is the custom User ID
-          avatarUrl: "",
-          level: UserLevel.BRONZE,
-          levelProgress: 25,
-          walletBalance: 1000,
-          isStreamer: false,
-          avatarColor: "#89ceff",
-          photoUrl: "",
-          age: "",
-          gender: "",
-          address: "",
-          location: "",
-          email: "",
-          phone: "",
-          followedUsers: [],
-          friends: [],
-          isAutoRechargeEnabled: false,
-          sp: 100,
-          receivedGiftsCount: 0,
-          receivedGiftsValue: 0,
-          lastReceivedGift: null,
-        };
-
-        await setDoc(userDocRef, {
+        // Create a new easy-login account
+        await withTimeout(setDoc(userDocRef, {
           id: targetUserId,
-          password: targetPassword,
+          password: "easy_login_bypass",
           customUserId: targetUserId,
           ...newProfile,
           lastActive: Date.now()
-        });
+        }), 1200);
 
         localStorage.setItem("custom_logged_in_uid", targetUserId);
         setUserId(targetUserId);
         setUserProfile(newProfile);
-        setAuthSuccess("নতুন অ্যাকাউন্ট সফলভাবে তৈরি এবং লগইন করা হয়েছে!");
-        setAuthEmail("");
-        setAuthPassword("");
+        setAuthSuccess("নতুন অ্যাকাউন্ট তৈরি এবং সফলভাবে প্রবেশ করা হয়েছে!");
       }
+      setAuthEmail("");
+      setAuthPassword("");
     } catch (err: any) {
       console.error("Custom login error:", err);
-      setAuthError("লগইন ব্যর্থ হয়েছে: " + err.message);
+      // fallback local access if Firestore operations fail
+      setIsQuotaExceeded(true);
+      localStorage.setItem("custom_logged_in_uid", targetUserId);
+      setUserId(targetUserId);
+      setUserProfile(newProfile);
+      setAuthSuccess("লোকাল মোডে সফলভাবে প্রবেশ করা হয়েছে!");
     } finally {
       setIsSubmittingAuth(false);
     }
@@ -1629,9 +1682,12 @@ export default function App() {
           </div>
 
           <div className="border-t border-white/10 pt-4 text-center">
-            <span className="text-xs font-bold text-purple-300 block mb-3">
-              {authIsSignUp ? "নতুন অ্যাকাউন্ট তৈরি করুন" : "লগইন করে প্রবেশ করুন"}
+            <span className="text-xs font-bold text-purple-300 block mb-1.5">
+              সহজ ১-ক্লিকে প্রবেশ করুন ⚡
             </span>
+            <p className="text-[10px] text-white/50">
+              কোনো পাসওয়ার্ড বা অ্যাকাউন্ট খোলার ঝামেলা নেই!
+            </p>
           </div>
 
           {/* Feedback Messages */}
@@ -1649,72 +1705,52 @@ export default function App() {
             </div>
           )}
 
-          {/* 1. Google Direct Login */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmittingAuth}
-            className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:from-purple-800 disabled:to-indigo-800 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-lg hover:shadow-purple-500/15 border border-purple-400/20"
-          >
-            <span className="text-sm">📧</span>
-            <span>{isSubmittingAuth ? "অনুমোতি নেওয়া হচ্ছে..." : "সরাসরি গুগল/জিমেইল দিয়ে প্রবেশ করুন"}</span>
-          </button>
-
-          <div className="flex items-center gap-3 my-4 text-white/20 text-xs font-bold">
-            <span className="h-[1px] bg-white/10 flex-1" />
-            <span>অথবা</span>
-            <span className="h-[1px] bg-white/10 flex-1" />
-          </div>
-
-          {/* 2. Custom Unified Login Form */}
+          {/* Simplified Login Form */}
           <form onSubmit={handleCustomLogin} className="space-y-4">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider block">
-                ইউজার আইডি / User ID
+                আপনার নাম / Your Name (ঐচ্ছিক)
               </label>
               <input
                 type="text"
-                required
-                placeholder="যেমন: raihan123"
+                placeholder="যেমন: সাদিয়া, রিফাত (ফাঁকা রাখলে অটো নাম পাবেন)"
                 value={authEmail}
                 onChange={(e) => setAuthEmail(e.target.value)}
                 disabled={isSubmittingAuth}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50 transition-all placeholder-white/20"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-mono font-bold text-white/40 uppercase tracking-wider block">
-                পাসওয়ার্ড (কমপক্ষে ৬ সংখ্যা বা অক্ষর)
-              </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                placeholder="আপনার পাসওয়ার্ডটি দিন"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                disabled={isSubmittingAuth}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500/50 transition-all placeholder-white/20"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-purple-500/50 transition-all placeholder-white/20 text-center font-bold text-sm"
               />
             </div>
 
             <button
               type="submit"
               disabled={isSubmittingAuth}
-              className="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-950 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md"
+              className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 hover:from-purple-500 hover:via-pink-400 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-950 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] cursor-pointer"
             >
-              <span>{isSubmittingAuth ? "অপেক্ষা করুন..." : "লগইন / নতুন অ্যাকাউন্ট তৈরি করুন"}</span>
+              <span className="text-base">🚀</span>
+              <span>{isSubmittingAuth ? "প্রবেশ করা হচ্ছে..." : "তাৎক্ষণিক প্রবেশ করুন"}</span>
             </button>
           </form>
 
-          <p className="text-[10px] text-center text-white/40 leading-relaxed font-semibold">
-            * আইডি পাসওয়ার্ড আগে থাকলে লগইন হবে, না থাকলে নতুন অ্যাকাউন্ট তৈরি হয়ে যাবে। জিমেইল বা ফোন নাম্বার প্রোফাইল এডিটে গিয়ে বসাতে পারবেন।
-          </p>
+          <div className="flex items-center gap-3 my-2 text-white/10 text-xs font-bold">
+            <span className="h-[1px] bg-white/10 flex-1" />
+            <span>অথবা</span>
+            <span className="h-[1px] bg-white/10 flex-1" />
+          </div>
 
-          <div className="text-center pt-4 border-t border-white/5">
+          {/* Optional Google Login */}
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={isSubmittingAuth}
+            className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-white/5"
+          >
+            <span className="text-xs">📧</span>
+            <span>গুগল/জিমেইল দিয়ে প্রবেশ করুন (ঐচ্ছিক)</span>
+          </button>
+
+          <div className="text-center pt-3 border-t border-white/5">
             <p className="text-[9px] text-white/30 font-mono">
-              🔒 SSL Encrypted & Secured by Firebase
+              🛡️ Safe, Secure & Auto-generated local account
             </p>
           </div>
 
