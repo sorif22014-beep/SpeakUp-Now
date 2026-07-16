@@ -13,6 +13,7 @@ interface ChatPanelProps {
   userProfile: UserProfile;
   chatSpeed: "slow" | "normal" | "hyper" | "frozen";
   onChangeSpeed: (speed: "slow" | "normal" | "hyper" | "frozen") => void;
+  onUserClick?: (userName: string) => void;
 }
 
 export default function ChatPanel({
@@ -21,6 +22,7 @@ export default function ChatPanel({
   userProfile,
   chatSpeed,
   onChangeSpeed,
+  onUserClick,
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -118,7 +120,12 @@ export default function ChatPanel({
                   <div>
                     <div className="flex items-center text-xs">
                       {renderBadge(msg.level)}
-                      <span className="font-extrabold text-white">{msg.user}</span>
+                      <span 
+                        className="font-extrabold text-white cursor-pointer hover:underline"
+                        onClick={() => onUserClick?.(msg.user)}
+                      >
+                        {msg.user}
+                      </span>
                     </div>
                     <p className="text-[11px] text-pink-300 mt-0.5">
                       Gifted <span className="font-extrabold underline">{msg.giftName}</span> (+{msg.giftValue} Level XP!)
@@ -136,24 +143,59 @@ export default function ChatPanel({
             );
           }
 
+          // System Join/Leave Entry Alert Message
+          if (msg.isSystem) {
+            return (
+              <div
+                key={msg.id}
+                className="p-2 py-2.5 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-center justify-between gap-1.5 animate-fade-in"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">👋</span>
+                  <span className="font-semibold">{msg.message}</span>
+                </div>
+                <span className="text-[9px] font-mono opacity-50">{msg.timestamp}</span>
+              </div>
+            );
+          }
+
           // Regular Message
           return (
-            <div key={msg.id} className="group flex flex-col hover:bg-white/5 p-1 rounded transition-colors duration-150">
-              <div className="flex items-baseline flex-wrap gap-1">
-                {renderBadge(msg.level)}
-                <span
-                  className="font-extrabold text-xs cursor-pointer hover:underline"
-                  style={{ color: msg.avatarColor || "#89ceff" }}
+            <div key={msg.id} className="group flex items-start gap-2.5 hover:bg-white/5 p-1.5 rounded-xl transition-all duration-150">
+              {msg.photoUrl ? (
+                <img 
+                  src={msg.photoUrl} 
+                  alt={msg.user} 
+                  className="w-6.5 h-6.5 rounded-full object-cover shrink-0 border border-white/20 cursor-pointer hover:scale-105 transition-all"
+                  onClick={() => onUserClick?.(msg.user)}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div 
+                  className="w-6.5 h-6.5 rounded-full bg-slate-800 text-[10px] font-black text-white/70 flex items-center justify-center shrink-0 border border-white/5 cursor-pointer hover:scale-105 transition-all"
+                  onClick={() => onUserClick?.(msg.user)}
                 >
-                  {msg.user}
-                </span>
-                <span className="text-[10px] text-white/30 font-mono ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                  {msg.timestamp}
-                </span>
+                  {msg.user.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline flex-wrap gap-1">
+                  {renderBadge(msg.level)}
+                  <span
+                    className="font-extrabold text-xs cursor-pointer hover:underline"
+                    style={{ color: msg.avatarColor || "#89ceff" }}
+                    onClick={() => onUserClick?.(msg.user)}
+                  >
+                    {msg.user}
+                  </span>
+                  <span className="text-[10px] text-white/30 font-mono ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                    {msg.timestamp}
+                  </span>
+                </div>
+                <p className="text-sm text-slate-100/95 mt-1 leading-relaxed break-words pl-1 border-l border-white/5">
+                  {msg.message}
+                </p>
               </div>
-              <p className="text-sm text-slate-100/95 mt-1 leading-relaxed break-words pl-1 border-l border-white/5">
-                {msg.message}
-              </p>
             </div>
           );
         })}
@@ -172,7 +214,7 @@ export default function ChatPanel({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/40 text-purple-200 font-mono font-bold border border-purple-500/20">
               LV {userProfile.levelProgress < 100 ? userProfile.levelProgress : 99}
             </span>
-            <span className="text-[10px] font-mono text-cyan-400">✨ {userProfile.walletBalance} Stars</span>
+            <span className="text-[10px] font-mono text-cyan-400">🪙 {userProfile.walletBalance} Coins</span>
           </div>
         </div>
 

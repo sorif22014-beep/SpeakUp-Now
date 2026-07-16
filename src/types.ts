@@ -19,6 +19,39 @@ export interface UserProfile {
   walletBalance: number; // Coins/Stars
   isStreamer: boolean;
   avatarColor: string;
+  photoUrl?: string;
+  age?: string;
+  gender?: string;
+  address?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  followedUsers?: string[];
+  friends?: string[];
+  isAutoRechargeEnabled?: boolean;
+  sp?: number; // Total Experience Points
+  receivedGiftsCount?: number;
+  receivedGiftsValue?: number;
+  lastReceivedGift?: {
+    icon: string;
+    name: string;
+    sender: string;
+    timestamp: number;
+  } | null;
+}
+
+export interface MicSeat {
+  index: number; // 0 to 9 representing seats 1 to 10
+  userId: string | null;
+  userName: string | null;
+  userAvatar?: string | null;
+  userPhotoUrl?: string | null;
+  avatarColor?: string | null;
+  isMutedByHost?: boolean;
+  isMicActive?: boolean;
+  isCameraActive?: boolean;
+  isSpeaking?: boolean;
+  lastActive?: number;
 }
 
 export interface LiveRoom {
@@ -35,6 +68,8 @@ export interface LiveRoom {
   streamerLevel: UserLevel;
   streamerLevelValue: number;
   tags: string[];
+  seats?: MicSeat[];
+  streamerId?: string; // ID of the room creator
 }
 
 export interface ChatMessage {
@@ -46,9 +81,11 @@ export interface ChatMessage {
   levelColor: string;
   avatarColor: string;
   isGift: boolean;
+  photoUrl?: string;
   giftIcon?: string;
   giftName?: string;
   giftValue?: number;
+  isSystem?: boolean;
 }
 
 export interface GiftItem {
@@ -67,4 +104,14 @@ export interface FloatingReaction {
   x: number;
   y: number;
   scale: number;
+}
+
+export interface RechargeRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  avatarColor: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  createdAt: number;
 }

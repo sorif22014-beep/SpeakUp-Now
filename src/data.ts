@@ -5,68 +5,7 @@
 
 import { LiveRoom, GiftItem, UserLevel } from "./types";
 
-export const MOCK_ROOMS: LiveRoom[] = [
-  {
-    id: "neon-groove",
-    title: "⚡ CYBERPUNK DJ SET: Live from Neo-Tokyo 2099",
-    streamerName: "DJ_VoxelPulse",
-    streamerAvatar: "https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150&auto=format&fit=crop&q=80",
-    category: "Music",
-    viewerCount: 1420,
-    likeCount: 42900,
-    bgGradient: "linear-gradient(135deg, #110033 0%, #330066 50%, #990099 100%)",
-    streamType: "cyber",
-    isLive: true,
-    streamerLevel: UserLevel.PLATINUM,
-    streamerLevelValue: 42,
-    tags: ["Cyberpunk", "Synthwave", "LiveDJ", "Techno"],
-  },
-  {
-    id: "chill-lofibeats",
-    title: "☕ Lofi Beats to study/relax to (Rainy Sanctuary)",
-    streamerName: "LofiNeko",
-    streamerAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    category: "Vibe",
-    viewerCount: 3820,
-    likeCount: 89100,
-    bgGradient: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)",
-    streamType: "ambient",
-    isLive: true,
-    streamerLevel: UserLevel.LEGENDARY,
-    streamerLevelValue: 88,
-    tags: ["Lofi", "Chill", "Coding", "Cozy"],
-  },
-  {
-    id: "synth-neon-retro",
-    title: "🌌 RETRO SYNTH JOURNEY — Soundwaves of the 80s",
-    streamerName: "Arcade_Odyssey",
-    streamerAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    category: "Music",
-    viewerCount: 740,
-    likeCount: 12500,
-    bgGradient: "linear-gradient(135deg, #0c0a0f 0%, #220b30 50%, #6b114d 100%)",
-    streamType: "retro",
-    isLive: true,
-    streamerLevel: UserLevel.GOLD,
-    streamerLevelValue: 25,
-    tags: ["80s", "Synthwave", "Retrowave", "Vinyl"],
-  },
-  {
-    id: "asmr-rain-sleep",
-    title: "🌧️ Whispering Rain & Binaural Soundscapes for Deep Focus",
-    streamerName: "SymphonyOfSilence",
-    streamerAvatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
-    category: "ASMR",
-    viewerCount: 2150,
-    likeCount: 34200,
-    bgGradient: "linear-gradient(135deg, #051923 0%, #0c2b35 50%, #004e64 100%)",
-    streamType: "visualizer",
-    isLive: true,
-    streamerLevel: UserLevel.SILVER,
-    streamerLevelValue: 18,
-    tags: ["ASMR", "Relax", "Rain", "Binaural"],
-  }
-];
+export const MOCK_ROOMS: LiveRoom[] = [];
 
 export const GIFT_ITEMS: GiftItem[] = [
   {

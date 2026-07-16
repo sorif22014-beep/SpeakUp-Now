@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room Info",
+      "description": "Information about a live streaming room",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "streamerName": { "type": "string" },
+        "streamerAvatar": { "type": "string" },
+        "category": { "type": "string" },
+        "viewerCount": { "type": "number" },
+        "likeCount": { "type": "number" },
+        "bgGradient": { "type": "string" },
+        "streamType": { "type": "string" },
+        "isLive": { "type": "boolean" },
+        "streamerLevel": { "type": "string" },
+        "streamerLevelValue": { "type": "number" },
+        "tags": { "type": "array" }
+      },
+      "required": ["title", "streamerName", "category", "viewerCount", "likeCount", "streamType", "isLive"]
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "A chat message or gift message sent by a user",
+      "type": "object",
+      "properties": {
+        "user": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "level": { "type": "string" },
+        "levelColor": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "isGift": { "type": "boolean" },
+        "giftIcon": { "type": "string" },
+        "giftName": { "type": "string" },
+        "giftValue": { "type": "number" }
+      },
+      "required": ["user", "timestamp", "isGift"]
+    },
+    "ActiveUser": {
+      "title": "Active User",
+      "description": "A user currently active in the room",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "level": { "type": "string" },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["name", "lastActive"]
+    },
+    "Reaction": {
+      "title": "Floating Reaction",
+      "description": "A floating reaction trigger event",
+      "type": "object",
+      "properties": {
+        "icon": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "scale": { "type": "number" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["icon", "x", "y", "scale", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stored user profile details including photos, age, gender, address, and location",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "level": { "type": "string" },
+        "levelProgress": { "type": "number" },
+        "walletBalance": { "type": "number" },
+        "photoUrl": { "type": "string" },
+        "age": { "type": "string" },
+        "gender": { "type": "string" },
+        "address": { "type": "string" },
+        "location": { "type": "string" },
+        "followedUsers": { "type": "array", "items": { "type": "string" } },
+        "friends": { "type": "array", "items": { "type": "string" } },
+        "lastActive": { "type": "number" }
+      },
+      "required": ["name", "lastActive"]
+    },
+    "RechargeRequest": {
+      "title": "Recharge Request",
+      "description": "A request sent by a user to recharge their Stars wallet balance, subject to Admin approval",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "avatarColor": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "userName", "amount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "A live streaming channel document"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages sent in this room"
+    },
+    "/rooms/{roomId}/users/{userId}": {
+      "schema": "ActiveUser",
+      "description": "Users currently active in this room"
+    },
+    "/rooms/{roomId}/reactions/{reactionId}": {
+      "schema": "Reaction",
+      "description": "Reactions triggered in this room"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Global user account profiles and stats"
+    },
+    "/recharge_requests/{requestId}": {
+      "schema": "RechargeRequest",
+      "description": "User wallet recharge requests waiting for admin approval"
+    }
+  }
+}

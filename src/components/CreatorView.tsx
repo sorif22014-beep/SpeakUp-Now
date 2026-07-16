@@ -4,12 +4,15 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { UserProfile, LiveRoom, FloatingReaction } from "../types";
+import { UserProfile, LiveRoom, FloatingReaction, MicSeat } from "../types";
 import { Video, Radio, Settings, Sparkles, Flame, CheckCircle, Shield, AlertTriangle } from "lucide-react";
-import LivePlayer from "./LivePlayer";
 import StreamerTools from "./StreamerTools";
+import MicSeatsGrid from "./MicSeatsGrid";
+import { db } from "../firebase";
+import { doc, setDoc, deleteDoc, onSnapshot, updateDoc } from "firebase/firestore";
 
 interface CreatorViewProps {
+  userId: string;
   userProfile: UserProfile;
   floatingReactions: FloatingReaction[];
   onAddReaction: (icon: string) => void;
@@ -18,6 +21,7 @@ interface CreatorViewProps {
 }
 
 export default function CreatorView({
+  userId,
   userProfile,
   floatingReactions,
   onAddReaction,
@@ -31,6 +35,7 @@ export default function CreatorView({
   const [likeGoal, setLikeGoal] = useState(10000);
   const [currentLikes, setCurrentLikes] = useState(1480);
   const [broadcastingTime, setBroadcastingTime] = useState(0);
+  const [syncedSeats, setSyncedSeats] = useState<MicSeat[] | undefined>(undefined);
 
   // Simulated streamer room object based on configurations
   const mockStreamerRoom: LiveRoom = {
@@ -49,6 +54,22 @@ export default function CreatorView({
     tags: ["LiveSetup", "DIY", "Interaction", category],
   };
 
+  // Real-time seats synchronization
+  useEffect(() => {
+    if (!isBroadcasting) return;
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
+    const roomId = `room-${cleanName}`;
+    const roomDocRef = doc(db, "rooms", roomId);
+
+    const unsub = onSnapshot(roomDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setSyncedSeats(data.seats);
+      }
+    });
+    return () => unsub();
+  }, [isBroadcasting, userProfile.name]);
+
   // Timer for active broadcast duration
   useEffect(() => {
     let interval: any = null;
@@ -63,6 +84,90 @@ export default function CreatorView({
     }
     return () => clearInterval(interval);
   }, [isBroadcasting]);
+
+  // Synchronize stream with Firestore in real-time (Creation & Deletion only)
+  useEffect(() => {
+    if (!isBroadcasting) return;
+
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
+    const roomId = `room-${cleanName}`;
+    const roomDocRef = doc(db, "rooms", roomId);
+
+    const initialSeats = Array.from({ length: 10 }, (_, i) => {
+      if (i === 0) {
+        return {
+          index: 0,
+          userId: userId,
+          userName: userProfile.name,
+          userAvatar: userProfile.avatarUrl || "",
+          userPhotoUrl: userProfile.photoUrl || "",
+          avatarColor: userProfile.avatarColor || "#89ceff",
+          isMutedByHost: false,
+          isMicActive: true,
+          isCameraActive: true,
+          isSpeaking: false,
+          lastActive: Date.now(),
+        };
+      }
+      return {
+        index: i,
+        userId: null,
+        userName: null,
+        userAvatar: null,
+        userPhotoUrl: null,
+        avatarColor: null,
+        isMutedByHost: false,
+        isMicActive: true,
+        isCameraActive: true,
+        isSpeaking: false,
+        lastActive: 0,
+      };
+    });
+
+    const roomObj: LiveRoom = {
+      id: roomId,
+      title: title,
+      streamerName: userProfile.name,
+      streamerAvatar: userProfile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      category: category,
+      viewerCount: 1, // Host
+      likeCount: currentLikes,
+      bgGradient: "linear-gradient(135deg, #110033 0%, #330066 50%, #990099 100%)",
+      streamType: streamType,
+      isLive: true,
+      streamerLevel: userProfile.level,
+      streamerLevelValue: userProfile.level === "Legendary" ? 99 : userProfile.level === "Platinum" ? 50 : 25,
+      tags: ["LiveSetup", "RealUser", category],
+      seats: initialSeats,
+      streamerId: userId,
+    };
+
+    setDoc(roomDocRef, roomObj).catch((err) => {
+      console.error("Error creating live room in Firestore:", err);
+    });
+
+    return () => {
+      // Delete the room from Firestore when broadcasting stops
+      deleteDoc(roomDocRef).catch((err) => {
+        console.error("Error deleting live room from Firestore:", err);
+      });
+    };
+  }, [isBroadcasting, title, category, streamType, userProfile.name, userProfile.level, userProfile.avatarUrl, userId]);
+
+  // Dynamic dynamic incremental updates to avoid overwriting or resetting seats
+  useEffect(() => {
+    if (!isBroadcasting) return;
+
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
+    const roomId = `room-${cleanName}`;
+    const roomDocRef = doc(db, "rooms", roomId);
+
+    updateDoc(roomDocRef, {
+      likeCount: currentLikes,
+    }).catch((err) => {
+      console.warn("Error updating dynamic like count:", err);
+    });
+  }, [currentLikes, isBroadcasting, userProfile.name]);
 
   // Format elapsed time (MM:SS)
   const formatTime = (seconds: number) => {
@@ -97,8 +202,8 @@ export default function CreatorView({
               <span className="text-red-400 font-extrabold text-sm">{formatTime(broadcastingTime)}</span>
             </div>
             <div className="bg-black/30 px-3.5 py-1.5 rounded-xl border border-white/5">
-              <span className="text-white/40 block text-[9px] uppercase font-bold">Est. Stars Earned</span>
-              <span className="text-yellow-400 font-extrabold text-sm">✨ 1,480 Stars</span>
+              <span className="text-white/40 block text-[9px] uppercase font-bold">Est. Coins Earned</span>
+              <span className="text-yellow-400 font-extrabold text-sm">🪙 1,480 Coins</span>
             </div>
           </div>
         )}
@@ -235,40 +340,82 @@ export default function CreatorView({
         </div>
       ) : (
         /* 2. Active Broadcasting Controls View */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Active streaming stage player */}
-            <LivePlayer
-              room={mockStreamerRoom}
-              floatingReactions={floatingReactions}
-              onAddReaction={onAddReaction}
-              isWebcamActive={isWebcamActive}
-              onToggleWebcam={onToggleWebcam}
-            />
-
-            {/* Stop Streaming Action bar */}
-            <div className="bg-red-950/40 border border-red-900/40 p-4 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs text-red-200">
-                <AlertTriangle className="w-4 h-4 text-red-400 animate-pulse shrink-0" />
-                <span>Broadcasting at 60 FPS under stream token studio_live_session. Warning: Ending session resets views.</span>
+        <div className="space-y-6 max-w-5xl mx-auto">
+          {/* Compact High-Fidelity Audio Broadcast Header (বড় ভিডিও বোর্ড ও ক্যামেরার বদলে চমৎকার স্ট্যাটাসবার) */}
+          <div className="p-6 bg-gradient-to-r from-purple-950/40 via-slate-900/60 to-indigo-950/40 border border-white/10 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-3xl -z-10" />
+            
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 border border-purple-400/30 flex items-center justify-center text-xl font-black text-white shrink-0 shadow-md">
+                🎙️
               </div>
-              <button
-                onClick={() => setIsBroadcasting(false)}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs transition-colors"
-              >
-                Terminate Broadcast
-              </button>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white font-mono text-[9px] font-extrabold flex items-center gap-1 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white block animate-ping" />
+                    BROADCAST LIVE
+                  </span>
+                  <span className="text-[10px] bg-purple-500/10 border border-purple-500/20 text-purple-300 font-extrabold px-2 py-0.5 rounded">
+                    Category: {category}
+                  </span>
+                  
+                  {/* CSS Soundwave Visualizer */}
+                  <div className="flex items-center gap-0.5 h-3 ml-1">
+                    <span className="w-[2px] h-1.5 bg-cyan-400 rounded-full animate-soundwave-1" style={{ animation: "soundwave 0.8s infinite ease-in-out" }} />
+                    <span className="w-[2px] h-3 bg-cyan-400 rounded-full animate-soundwave-2" style={{ animation: "soundwave 0.5s infinite ease-in-out" }} />
+                    <span className="w-[2px] h-2.5 bg-cyan-400 rounded-full animate-soundwave-3" style={{ animation: "soundwave 0.7s infinite ease-in-out" }} />
+                    <span className="w-[2px] h-1 bg-cyan-400 rounded-full animate-soundwave-4" style={{ animation: "soundwave 0.6s infinite ease-in-out" }} />
+                  </div>
+                </div>
+                
+                <h3 className="font-sans font-black text-base text-white mt-1.5 tracking-tight truncate">
+                  {title}
+                </h3>
+                
+                <p className="text-[11px] text-white/50 mt-1 flex items-center gap-2">
+                  <span>Host: <strong className="text-purple-300">@{userProfile.name}</strong></span>
+                  <span>•</span>
+                  <span>Likes: <strong className="text-cyan-400 font-mono">{currentLikes.toLocaleString()}</strong></span>
+                  <span>•</span>
+                  <span>Duration: <strong className="text-teal-400 font-mono">{Math.floor(broadcastingTime / 60)}m {broadcastingTime % 60}s</strong></span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="bg-black/40 border border-white/5 px-4 py-2.5 rounded-xl text-center">
+                <span className="text-[9px] text-white/40 font-bold block uppercase tracking-wider">রুম মেম্বার / Viewers</span>
+                <span className="text-xs font-black text-white font-mono">1,850 online</span>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-6">
-            {/* Live sound effects panel */}
-            <StreamerTools
-              viewerGoal={5000}
-              likeGoal={likeGoal}
-              currentLikes={currentLikes}
-              onMockAudienceCheer={onAddReaction}
-            />
+          {/* 1-10 Audio Seats Section */}
+          <MicSeatsGrid
+            roomId={`room-${userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator"}`}
+            seats={syncedSeats}
+            userId={userId}
+            userProfile={userProfile}
+            isHost={true}
+          />
+
+          {/* Stop Streaming Action bar */}
+          <div className="bg-red-950/30 border border-red-500/20 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-red-500/10 text-red-400">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </span>
+              <div>
+                <p className="text-xs font-bold text-white">লাইভ ব্রডকাস্ট সেশন অ্যাক্টিভ / Broadcast Active</p>
+                <p className="text-[10px] text-red-200/60 mt-0.5">ব্রডকাস্ট শেষ করলে আপনার সব মেম্বার চলে যাবে এবং রুম বন্ধ হবে।</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsBroadcasting(false)}
+              className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs transition-all shadow-lg hover:shadow-red-500/10"
+            >
+              ব্রডকাস্ট শেষ করুন / End Broadcast
+            </button>
           </div>
         </div>
       )}

@@ -208,7 +208,7 @@ export default function StreamerTools({
                   { emoji: "❤️", name: "Hearts" },
                   { emoji: "🔥", name: "Fires" },
                   { emoji: "⚡", name: "Sparks" },
-                  { emoji: "🌟", name: "Stars" },
+                  { emoji: "🌟", name: "Coins" },
                 ].map((item) => (
                   <button
                     key={item.emoji}
