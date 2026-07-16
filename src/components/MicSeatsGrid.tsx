@@ -16,6 +16,8 @@ interface MicSeatsGridProps {
   userProfile: UserProfile;
   isHost: boolean;
   onSelectRecipient?: (id: string, name: string) => void;
+  isQuotaExceeded?: boolean;
+  onUpdateSeats?: (updatedSeats: MicSeat[]) => void;
 }
 
 // Seat Video Preview component to capture real webcam if allowed, with a simulated live cam fallback
@@ -76,6 +78,8 @@ export default function MicSeatsGrid({
   userProfile,
   isHost,
   onSelectRecipient,
+  isQuotaExceeded = false,
+  onUpdateSeats,
 }: MicSeatsGridProps) {
   // Initialize seats if undefined
   const finalSeats = seats || Array.from({ length: 10 }, (_, i) => ({
@@ -702,17 +706,56 @@ export default function MicSeatsGrid({
     setActionLoading(true);
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.userId === userId) {
+        return {
+          index: s.index,
+          userId: null,
+          userName: null,
+          userAvatar: null,
+          userPhotoUrl: null,
+          avatarColor: null,
+          isMutedByHost: false,
+          isMicActive: true,
+          isCameraActive: true,
+          isSpeaking: false,
+          lastActive: 0,
+        };
+      }
+      return s;
+    });
+
+    currentSeats[seatIndex] = {
+      index: seatIndex,
+      userId: userId,
+      userName: userProfile.name,
+      userAvatar: userProfile.avatarUrl || "",
+      userPhotoUrl: userProfile.photoUrl || "",
+      avatarColor: userProfile.avatarColor || "#89ceff",
+      isMutedByHost: false,
+      isMicActive: localMicActive,
+      isCameraActive: localCameraActive,
+      isSpeaking: false,
+      lastActive: Date.now(),
+    };
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      speakBengaliText(`আমি সিট নাম্বার ${seatIndex + 1}-এ যোগ দিয়েছি!`);
+      setActionLoading(false);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
+        let databaseSeats: MicSeat[] = roomData.seats || [];
 
-        // Fill empty array if not exist
-        if (currentSeats.length === 0) {
-          currentSeats = Array.from({ length: 10 }, (_, i) => ({
+        if (databaseSeats.length === 0) {
+          databaseSeats = Array.from({ length: 10 }, (_, i) => ({
             index: i,
             userId: null,
             userName: null,
@@ -727,13 +770,11 @@ export default function MicSeatsGrid({
           }));
         }
 
-        // Check if seat is taken
-        if (currentSeats[seatIndex].userId) {
+        if (databaseSeats[seatIndex].userId) {
           throw new Error("এই আসনটি ইতোমধ্যে পূর্ণ হয়ে গেছে!");
         }
 
-        // Clear user from any other seat
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.userId === userId) {
             return {
               index: s.index,
@@ -752,29 +793,19 @@ export default function MicSeatsGrid({
           return s;
         });
 
-        // Set on new seat
-        currentSeats[seatIndex] = {
-          index: seatIndex,
-          userId: userId,
-          userName: userProfile.name,
-          userAvatar: userProfile.avatarUrl || "",
-          userPhotoUrl: userProfile.photoUrl || "",
-          avatarColor: userProfile.avatarColor || "#89ceff",
-          isMutedByHost: false,
-          isMicActive: localMicActive,
-          isCameraActive: localCameraActive,
-          isSpeaking: false,
-          lastActive: Date.now(),
-        };
-
-        transaction.update(roomDocRef, { seats: currentSeats });
+        databaseSeats[seatIndex] = currentSeats[seatIndex];
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
 
-      // Play a small vocal entry speech
       speakBengaliText(`আমি সিট নাম্বার ${seatIndex + 1}-এ যোগ দিয়েছি!`);
     } catch (err: any) {
       console.error("Error joining seat:", err);
-      alert(err.message || "সিটে যোগ দিতে সমস্যা হয়েছে!");
+      if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+        onUpdateSeats?.(currentSeats);
+        speakBengaliText(`আমি সিট নাম্বার ${seatIndex + 1}-এ যোগ দিয়েছি!`);
+      } else {
+        alert(err.message || "সিটে যোগ দিতে সমস্যা হয়েছে!");
+      }
     } finally {
       setActionLoading(false);
     }
@@ -786,16 +817,41 @@ export default function MicSeatsGrid({
     setActionLoading(true);
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.userId === userId) {
+        return {
+          index: s.index,
+          userId: null,
+          userName: null,
+          userAvatar: null,
+          userPhotoUrl: null,
+          avatarColor: null,
+          isMutedByHost: false,
+          isMicActive: true,
+          isCameraActive: true,
+          isSpeaking: false,
+          lastActive: 0,
+        };
+      }
+      return s;
+    });
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      setActionLoading(false);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
-        if (currentSeats.length === 0) return;
+        let databaseSeats: MicSeat[] = roomData.seats || [];
+        if (databaseSeats.length === 0) return;
 
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.userId === userId) {
             return {
               index: s.index,
@@ -814,10 +870,11 @@ export default function MicSeatsGrid({
           return s;
         });
 
-        transaction.update(roomDocRef, { seats: currentSeats });
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
     } catch (err) {
       console.error("Error leaving seat:", err);
+      onUpdateSeats?.(currentSeats);
     } finally {
       setActionLoading(false);
     }
@@ -831,26 +888,39 @@ export default function MicSeatsGrid({
     if (!isOnSeat) return;
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.userId === userId) {
+        return { ...s, isMicActive: nextMicState };
+      }
+      return s;
+    });
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
-        if (currentSeats.length === 0) return;
+        let databaseSeats: MicSeat[] = roomData.seats || [];
+        if (databaseSeats.length === 0) return;
 
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.userId === userId) {
             return { ...s, isMicActive: nextMicState };
           }
           return s;
         });
 
-        transaction.update(roomDocRef, { seats: currentSeats });
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
     } catch (err) {
       console.error("Error toggling mic in database:", err);
+      onUpdateSeats?.(currentSeats);
     }
   };
 
@@ -862,26 +932,39 @@ export default function MicSeatsGrid({
     if (!isOnSeat) return;
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.userId === userId) {
+        return { ...s, isCameraActive: nextCamState };
+      }
+      return s;
+    });
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
-        if (currentSeats.length === 0) return;
+        let databaseSeats: MicSeat[] = roomData.seats || [];
+        if (databaseSeats.length === 0) return;
 
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.userId === userId) {
             return { ...s, isCameraActive: nextCamState };
           }
           return s;
         });
 
-        transaction.update(roomDocRef, { seats: currentSeats });
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
     } catch (err) {
       console.error("Error toggling camera in database:", err);
+      onUpdateSeats?.(currentSeats);
     }
   };
 
@@ -890,16 +973,33 @@ export default function MicSeatsGrid({
     if (!isHost) return;
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.index === targetIndex) {
+        const isMuted = !s.isMutedByHost;
+        return {
+          ...s,
+          isMutedByHost: isMuted,
+          isMicActive: isMuted ? false : s.isMicActive,
+        };
+      }
+      return s;
+    });
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
-        if (currentSeats.length === 0) return;
+        let databaseSeats: MicSeat[] = roomData.seats || [];
+        if (databaseSeats.length === 0) return;
 
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.index === targetIndex) {
             const isMuted = !s.isMutedByHost;
             return {
@@ -911,10 +1011,11 @@ export default function MicSeatsGrid({
           return s;
         });
 
-        transaction.update(roomDocRef, { seats: currentSeats });
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
     } catch (err) {
       console.error("Host error toggling mute:", err);
+      onUpdateSeats?.(currentSeats);
     }
   };
 
@@ -923,16 +1024,39 @@ export default function MicSeatsGrid({
     if (!isHost) return;
     const roomDocRef = doc(db, "rooms", roomId);
 
+    let currentSeats = [...finalSeats].map((s) => {
+      if (s.index === targetIndex) {
+        return {
+          index: s.index,
+          userId: null,
+          userName: null,
+          userAvatar: null,
+          userPhotoUrl: null,
+          avatarColor: null,
+          isMutedByHost: false,
+          isMicActive: true,
+          isCameraActive: true,
+          isSpeaking: false,
+        };
+      }
+      return s;
+    });
+
+    if (isQuotaExceeded) {
+      onUpdateSeats?.(currentSeats);
+      return;
+    }
+
     try {
       await runTransaction(db, async (transaction) => {
         const roomSnap = await transaction.get(roomDocRef);
         if (!roomSnap.exists()) return;
 
         const roomData = roomSnap.data();
-        let currentSeats: MicSeat[] = roomData.seats || [];
-        if (currentSeats.length === 0) return;
+        let databaseSeats: MicSeat[] = roomData.seats || [];
+        if (databaseSeats.length === 0) return;
 
-        currentSeats = currentSeats.map((s) => {
+        databaseSeats = databaseSeats.map((s) => {
           if (s.index === targetIndex) {
             return {
               index: s.index,
@@ -950,10 +1074,11 @@ export default function MicSeatsGrid({
           return s;
         });
 
-        transaction.update(roomDocRef, { seats: currentSeats });
+        transaction.update(roomDocRef, { seats: databaseSeats });
       });
     } catch (err) {
       console.error("Host error kicking user from seat:", err);
+      onUpdateSeats?.(currentSeats);
     }
   };
 

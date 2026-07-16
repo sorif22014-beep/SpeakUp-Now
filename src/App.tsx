@@ -250,6 +250,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<"home" | "users" | "creative" | "all-chat" | "profile">("home");
   const [rooms, setRooms] = useState<LiveRoom[]>([]);
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(false);
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // starts in the Lobby!
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -661,6 +662,82 @@ export default function App() {
           updatedRooms.push({ id: docSnap.id, ...docSnap.data() } as LiveRoom);
         });
         setRooms(updatedRooms);
+      }, (error) => {
+        console.error("Firestore onSnapshot error for rooms:", error);
+        if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+          setIsQuotaExceeded(true);
+          setRooms((prev) => {
+            if (prev.length > 0) return prev;
+            return [
+              {
+                id: "local-chat-room",
+                title: "বাংলা লাইভ আড্ডাঘর 🇧🇩 (Quota Fallback Active)",
+                streamerName: "সদস্য ১",
+                streamerAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+                category: "cyber",
+                viewerCount: 15,
+                likeCount: 120,
+                bgGradient: "linear-gradient(135deg, #110033 0%, #330066 50%, #990099 100%)",
+                streamType: "audio",
+                isLive: true,
+                streamerLevel: "Legendary",
+                streamerLevelValue: 99,
+                tags: ["Lounge", "LocalFallback", "Community"],
+                seats: [
+                  { index: 0, userId: "streamer-1", userName: "সরিফ (Host) 👑", userAvatar: "", userPhotoUrl: "", avatarColor: "#00ffcc", isMutedByHost: false, isMicActive: true, isCameraActive: false, isSpeaking: true, lastActive: Date.now() },
+                  { index: 1, userId: "user-2", userName: "জান্নাত (Admin) ❤️", userAvatar: "", userPhotoUrl: "", avatarColor: "#ffaa00", isMutedByHost: false, isMicActive: true, isCameraActive: false, isSpeaking: false, lastActive: Date.now() },
+                  { index: 2, userId: "user-3", userName: "সাদিয়া 🌸", userAvatar: "", userPhotoUrl: "", avatarColor: "#ff66cc", isMutedByHost: false, isMicActive: false, isCameraActive: false, isSpeaking: false, lastActive: Date.now() },
+                  ...Array.from({ length: 7 }, (_, i) => ({
+                    index: i + 3,
+                    userId: null,
+                    userName: null,
+                    userAvatar: null,
+                    userPhotoUrl: null,
+                    avatarColor: null,
+                    isMutedByHost: false,
+                    isMicActive: true,
+                    isCameraActive: true,
+                    isSpeaking: false,
+                    lastActive: 0,
+                  }))
+                ],
+                streamerId: "streamer-1"
+              },
+              {
+                id: "local-music-room",
+                title: "স্মৃতিময় গান ও লফি আড্ডা 🎵",
+                streamerName: "আরজে রাতুল",
+                streamerAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+                category: "ambient",
+                viewerCount: 28,
+                likeCount: 340,
+                bgGradient: "linear-gradient(135deg, #0d001a 0%, #1a0033 50%, #4d004d 100%)",
+                streamType: "audio",
+                isLive: true,
+                streamerLevel: "Platinum",
+                streamerLevelValue: 50,
+                tags: ["Music", "Chill", "Lofi"],
+                seats: [
+                  { index: 0, userId: "streamer-2", userName: "আরজে রাতুল 🎤", userAvatar: "", userPhotoUrl: "", avatarColor: "#89ceff", isMutedByHost: false, isMicActive: true, isCameraActive: false, isSpeaking: true, lastActive: Date.now() },
+                  ...Array.from({ length: 9 }, (_, i) => ({
+                    index: i + 1,
+                    userId: null,
+                    userName: null,
+                    userAvatar: null,
+                    userPhotoUrl: null,
+                    avatarColor: null,
+                    isMutedByHost: false,
+                    isMicActive: true,
+                    isCameraActive: true,
+                    isSpeaking: false,
+                    lastActive: 0,
+                  }))
+                ],
+                streamerId: "streamer-2"
+              }
+            ];
+          });
+        }
       });
 
       return unsub;
@@ -721,6 +798,11 @@ export default function App() {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       setOnlineUsers(list);
+    }, (error) => {
+      console.error("Firestore onSnapshot error for users list:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
     return () => unsub();
   }, []);
@@ -755,6 +837,11 @@ export default function App() {
           lastReceivedGift: data.lastReceivedGift || prev.lastReceivedGift || null,
         }));
       }
+    }, (error) => {
+      console.error("Firestore onSnapshot error for current user profile:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
     return () => unsub();
   }, [userId]);
@@ -768,6 +855,11 @@ export default function App() {
         reqs.push({ id: docSnap.id, ...docSnap.data() });
       });
       setRechargeRequests(reqs);
+    }, (error) => {
+      console.error("Firestore onSnapshot error for recharge_requests:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
     return () => unsub();
   }, []);
@@ -916,6 +1008,11 @@ export default function App() {
       });
       // Reverse so it's rendering in chronological order
       setMessages(msgs.reverse());
+    }, (error) => {
+      console.error("Firestore onSnapshot error for room chats:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
 
     return () => unsub();
@@ -954,6 +1051,11 @@ export default function App() {
           }
         }
       });
+    }, (error) => {
+      console.error("Firestore onSnapshot error for reactions:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
 
     return () => unsub();
@@ -970,6 +1072,11 @@ export default function App() {
         msgs.push({ id: docSnap.id, ...docSnap.data() } as ChatMessage);
       });
       setLoungeMessages(msgs.reverse());
+    }, (error) => {
+      console.error("Firestore onSnapshot error for global lounge chat:", error);
+      if (error?.message?.includes("Quota exceeded") || error?.message?.includes("quota") || error?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
     });
 
     return () => unsub();
@@ -1062,12 +1169,25 @@ export default function App() {
       createdAt: Date.now(),
     };
 
+    if (isQuotaExceeded) {
+      setMessages((prev) => [...prev, { id: `local-room-msg-${Date.now()}`, ...userMsg }]);
+      handleAddReaction("❤️");
+      grantXP(6);
+      return;
+    }
+
     try {
       await addDoc(collection(db, "rooms", activeRoomId, "messages"), userMsg);
       await handleAddReaction("❤️");
       grantXP(6);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Firestore post user message error:", err);
+      if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+        setMessages((prev) => [...prev, { id: `local-room-msg-${Date.now()}`, ...userMsg }]);
+        handleAddReaction("❤️");
+        grantXP(6);
+      }
     }
   };
 
@@ -1130,6 +1250,19 @@ export default function App() {
       createdAt: Date.now(),
     };
 
+    const handleLocalGiftFallback = () => {
+      setMessages((prev) => [...prev, { id: `local-gift-${Date.now()}`, ...giftMsg }]);
+      setRooms((prev) => prev.map((r) => r.id === activeRoomId ? { ...r, likeCount: r.likeCount + gift.cost * 12 } : r));
+      triggerBurstInFirestore(gift.icon, gift.cost >= 200 ? 12 : 6);
+      const xpGained = Math.max(12, Math.floor(gift.cost * 0.4));
+      grantXP(xpGained);
+    };
+
+    if (isQuotaExceeded) {
+      handleLocalGiftFallback();
+      return;
+    }
+
     try {
       // Add message to Firestore
       await addDoc(collection(db, "rooms", activeRoomId, "messages"), giftMsg);
@@ -1161,8 +1294,12 @@ export default function App() {
       // Grant experience to sender
       const xpGained = Math.max(12, Math.floor(gift.cost * 0.4));
       grantXP(xpGained);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error sending gift:", err);
+      if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+        handleLocalGiftFallback();
+      }
     }
   };
 
@@ -1422,11 +1559,22 @@ export default function App() {
       createdAt: Date.now(),
     };
 
+    if (isQuotaExceeded) {
+      setLoungeMessages((prev) => [...prev, { id: `local-lounge-msg-${Date.now()}`, ...newMsg }]);
+      grantXP(5);
+      return;
+    }
+
     try {
       await addDoc(collection(db, "global_messages"), newMsg);
       grantXP(5);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error sending global lounge message:", err);
+      if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+        setLoungeMessages((prev) => [...prev, { id: `local-lounge-msg-${Date.now()}`, ...newMsg }]);
+        grantXP(5);
+      }
     }
   };
 
@@ -1578,6 +1726,23 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0c0e17] text-[#e1e1ef] font-sans overflow-hidden select-none" id="app-viewport">
       
+      {isQuotaExceeded && (
+        <div className="bg-gradient-to-r from-amber-600/90 via-orange-600/90 to-red-600/90 text-white px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2 shadow-lg animate-fade-in shrink-0 border-b border-orange-500/30 z-50">
+          <span className="text-sm">⚡</span>
+          <span>
+            {language === "BN" 
+              ? "ফায়ারবেস কোটা সীমা অতিক্রম করেছে! নিরবচ্ছিন্ন লাইভ সিমুলেশন এবং লোকাল স্যান্ডবক্স মোড সক্রিয় করা হয়েছে।" 
+              : "Firebase daily quota limits exceeded! Real-Time Local Sandbox & Live Simulation Mode is active."}
+          </span>
+          <button 
+            onClick={() => setIsQuotaExceeded(false)}
+            className="ml-3 bg-white/20 hover:bg-white/30 text-white font-black px-2 py-0.5 rounded-md text-[10px]"
+          >
+            {language === "BN" ? "ঠিক আছে" : "Dismiss"}
+          </button>
+        </div>
+      )}
+
       {/* 1. Header row with brand branding and stats */}
       <header className="h-16 border-b border-white/10 px-4 sm:px-6 flex items-center justify-between bg-slate-950/60 backdrop-blur-md shrink-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
@@ -3061,6 +3226,12 @@ export default function App() {
                 onSelectRecipient={(id, name) => {
                   setRecipientId(id);
                   setRecipientName(name);
+                }}
+                isQuotaExceeded={isQuotaExceeded}
+                onUpdateSeats={(updatedSeats) => {
+                  setRooms((prev) =>
+                    prev.map((r) => (r.id === activeRoom.id ? { ...r, seats: updatedSeats } : r))
+                  );
                 }}
               />
 
