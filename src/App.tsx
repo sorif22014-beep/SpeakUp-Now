@@ -89,7 +89,7 @@ const RoomLatestComment = ({ roomId }: { roomId: string }) => {
   );
 };
 
-const withTimeout = <T,>(promise: Promise<T>, ms: number = 1500): Promise<T> => {
+const withTimeout = <T,>(promise: Promise<T>, ms: number = 15000): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
@@ -129,6 +129,19 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
+    // Safety timeout to ensure loading screen vanishes if Firebase hangs/offline
+    const safetyTimeout = setTimeout(() => {
+      if (active) {
+        setIsAuthLoading((loading) => {
+          if (loading) {
+            console.warn("Safety trigger: Boot took too long, bypassing loader.");
+            return false;
+          }
+          return loading;
+        });
+      }
+    }, 2200);
+
     const bootAuth = async () => {
       const customUid = localStorage.getItem("custom_logged_in_uid");
       if (customUid) {
@@ -158,7 +171,7 @@ export default function App() {
         };
 
         try {
-          const userDoc = await withTimeout(getDoc(userDocRef), 1200);
+          const userDoc = await withTimeout(getDoc(userDocRef), 15000);
           if (userDoc.exists() && active) {
             const data = userDoc.data();
             setUserId(customUid);
@@ -196,7 +209,9 @@ export default function App() {
           }
         } catch (err: any) {
           console.error("Error loading custom profile on boot, falling back locally:", err);
-          setIsQuotaExceeded(true);
+          if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+            setIsQuotaExceeded(true);
+          }
           setUserId(customUid);
           setUserProfile(fallbackProfile);
           setIsAuthLoading(false);
@@ -288,6 +303,7 @@ export default function App() {
 
     return () => {
       active = false;
+      clearTimeout(safetyTimeout);
       if (unsub && typeof unsub === "function") unsub();
     };
   }, []);
@@ -307,7 +323,8 @@ export default function App() {
   // Real-time Global Lounge All-Chat state
   const [loungeMessages, setLoungeMessages] = useState<ChatMessage[]>([]);
   const [loungeInput, setLoungeInput] = useState("");
-  const [loungeSearchQuery, setLoungeSearchQuery] = useState("");
+  const [roomSearchQuery, setRoomSearchQuery] = useState("");
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [lobbyGridCols, setLobbyGridCols] = useState<number>(5);
 
@@ -325,6 +342,13 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"stream" | "chat">("stream");
   const [lobbySocialTab, setLobbySocialTab] = useState<"following" | "fans">("following");
+
+  // Streamer states (lifted to prevent unmount deletion)
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("🚀 LEVELING UP VIBES — Join the interactive live lounge");
+  const [broadcastCategory, setBroadcastCategory] = useState("Vibe");
+  const [broadcastStreamType, setBroadcastStreamType] = useState<"visualizer" | "cyber" | "ambient" | "retro" | "camera">("cyber");
+  const [broadcastLikes, setBroadcastLikes] = useState(1480);
 
   // Recharge & Admin States
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
@@ -391,6 +415,48 @@ export default function App() {
     }
   };
 
+  // Instantly bypass Firebase and enter sandbox/local mode!
+  const handleBypassLogin = () => {
+    setAuthError("");
+    setAuthSuccess("");
+    const typedName = authEmail.trim();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const targetUserId = typedName 
+      ? `${typedName.toLowerCase().replace(/[^a-zA-Z0-9\u0980-\u09ff_]/g, "")}_${randomSuffix}` 
+      : `guest_${randomSuffix}`;
+    const displayName = typedName || `গেস্ট_${randomSuffix}`;
+
+    const newProfile: UserProfile = {
+      name: displayName,
+      avatarUrl: "",
+      level: UserLevel.BRONZE,
+      levelProgress: 25,
+      walletBalance: 1200,
+      isStreamer: false,
+      avatarColor: ["#89ceff", "#ffaa00", "#ff66cc", "#00ffcc", "#aa33ff"][Math.floor(Math.random() * 5)],
+      photoUrl: "",
+      age: "",
+      gender: "",
+      address: "",
+      location: "",
+      email: "",
+      phone: "",
+      followedUsers: [],
+      friends: [],
+      isAutoRechargeEnabled: false,
+      sp: 100,
+      receivedGiftsCount: 0,
+      receivedGiftsValue: 0,
+      lastReceivedGift: null,
+    };
+
+    setIsQuotaExceeded(true);
+    localStorage.setItem("custom_logged_in_uid", targetUserId);
+    setUserId(targetUserId);
+    setUserProfile(newProfile);
+    setAuthSuccess("লোকাল স্যান্ডবক্স মোডে সফলভাবে প্রবেশ করা হয়েছে!");
+  };
+
   // Simplified 1-Click Easy Login: No password or strict check required!
   const handleCustomLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -447,7 +513,7 @@ export default function App() {
       }
 
       const userDocRef = doc(db, "users", targetUserId);
-      const userSnap = await withTimeout(getDoc(userDocRef), 1200);
+      const userSnap = await withTimeout(getDoc(userDocRef), 15000);
 
       if (userSnap.exists()) {
         const data = userSnap.data();
@@ -485,7 +551,7 @@ export default function App() {
           customUserId: targetUserId,
           ...newProfile,
           lastActive: Date.now()
-        }), 1200);
+        }), 15000);
 
         localStorage.setItem("custom_logged_in_uid", targetUserId);
         setUserId(targetUserId);
@@ -497,7 +563,9 @@ export default function App() {
     } catch (err: any) {
       console.error("Custom login error:", err);
       // fallback local access if Firestore operations fail
-      setIsQuotaExceeded(true);
+      if (err?.message?.includes("Quota exceeded") || err?.message?.includes("quota") || err?.code === "resource-exhausted") {
+        setIsQuotaExceeded(true);
+      }
       localStorage.setItem("custom_logged_in_uid", targetUserId);
       setUserId(targetUserId);
       setUserProfile(newProfile);
@@ -809,6 +877,9 @@ export default function App() {
   // Sync current user's profile presence in Firestore
   useEffect(() => {
     if (!userId) return;
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "creator";
+    const brId = `room-${cleanName}-${userId.substring(0, 5)}`;
+    
     const syncPresence = async () => {
       try {
         const userDocRef = doc(db, "users", userId);
@@ -826,9 +897,8 @@ export default function App() {
           location: userProfile.location || "",
           email: userProfile.email || "",
           phone: userProfile.phone || "",
-          followedUsers: userProfile.followedUsers || [],
-          friends: userProfile.friends || [],
           isAutoRechargeEnabled: userProfile.isAutoRechargeEnabled || false,
+          currentRoomId: isBroadcasting ? brId : (activeRoomId || null),
           lastActive: Date.now(),
         }, { merge: true });
       } catch (e) {
@@ -837,9 +907,99 @@ export default function App() {
     };
 
     syncPresence();
-    const interval = setInterval(syncPresence, 60000); // Heartbeat every 60s
+    const interval = setInterval(syncPresence, 30000); // Heartbeat every 30s for responsiveness
     return () => clearInterval(interval);
-  }, [userId, userProfile.name, userProfile.avatarColor, userProfile.level, userProfile.levelProgress, userProfile.walletBalance, userProfile.photoUrl, userProfile.age, userProfile.gender, userProfile.address, userProfile.location, userProfile.email, userProfile.phone, userProfile.followedUsers, userProfile.friends, userProfile.isAutoRechargeEnabled]);
+  }, [userId, activeRoomId, isBroadcasting, userProfile.name, userProfile.avatarColor, userProfile.level, userProfile.levelProgress, userProfile.walletBalance, userProfile.photoUrl, userProfile.age, userProfile.gender, userProfile.address, userProfile.location, userProfile.email, userProfile.phone, userProfile.isAutoRechargeEnabled]);
+
+  // Synchronize stream with Firestore in real-time from App.tsx (so it stays alive when tab changes)
+  useEffect(() => {
+    if (!isBroadcasting || !userId) return;
+
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "creator";
+    const brRoomId = `room-${cleanName}-${userId.substring(0, 5)}`;
+    const roomDocRef = doc(db, "rooms", brRoomId);
+
+    const initialSeats = Array.from({ length: 10 }, (_, i) => {
+      if (i === 0) {
+        return {
+          index: 0,
+          userId: userId,
+          userName: userProfile.name,
+          userAvatar: userProfile.avatarUrl || "",
+          userPhotoUrl: userProfile.photoUrl || "",
+          avatarColor: userProfile.avatarColor || "#89ceff",
+          isMutedByHost: false,
+          isMicActive: true,
+          isCameraActive: true,
+          isSpeaking: false,
+          lastActive: Date.now(),
+        };
+      }
+      return {
+        index: i,
+        userId: null,
+        userName: null,
+        userAvatar: null,
+        userPhotoUrl: null,
+        avatarColor: null,
+        isMutedByHost: false,
+        isMicActive: true,
+        isCameraActive: true,
+        isSpeaking: false,
+        lastActive: 0,
+      };
+    });
+
+    const roomObj: LiveRoom = {
+      id: brRoomId,
+      title: broadcastTitle,
+      streamerName: userProfile.name,
+      streamerAvatar: userProfile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      category: broadcastCategory,
+      viewerCount: 1, // Host
+      likeCount: broadcastLikes,
+      bgGradient: "linear-gradient(135deg, #110033 0%, #330066 50%, #990099 100%)",
+      streamType: broadcastStreamType,
+      isLive: true,
+      streamerLevel: userProfile.level,
+      streamerLevelValue: userProfile.level === "Legendary" ? 99 : userProfile.level === "Platinum" ? 50 : 25,
+      tags: ["LiveSetup", "RealUser", broadcastCategory],
+      seats: initialSeats,
+      streamerId: userId,
+    };
+
+    setDoc(roomDocRef, roomObj).catch((err) => {
+      console.error("Error creating live room in Firestore:", err);
+    });
+
+    return () => {
+      // Delete the room from Firestore when broadcasting stops
+      deleteDoc(roomDocRef).catch((err) => {
+        console.error("Error deleting live room from Firestore:", err);
+      });
+    };
+  }, [isBroadcasting, broadcastTitle, broadcastCategory, broadcastStreamType, userProfile.name, userProfile.level, userProfile.avatarUrl, userId]);
+
+  // Periodic update of likes for the broadcaster's room
+  useEffect(() => {
+    if (!isBroadcasting || !userId) return;
+
+    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "creator";
+    const brRoomId = `room-${cleanName}-${userId.substring(0, 5)}`;
+    const roomDocRef = doc(db, "rooms", brRoomId);
+
+    const interval = setInterval(() => {
+      setBroadcastLikes((prev) => {
+        const nextLikes = prev + Math.floor(Math.random() * 8) + 2;
+        updateDoc(roomDocRef, { likeCount: nextLikes }).catch((err) => {
+          console.warn("Error updating dynamic like count:", err);
+        });
+        return nextLikes;
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isBroadcasting, userId, userProfile.name]);
 
   // Sync list of active online users in real-time
   useEffect(() => {
@@ -1634,9 +1794,9 @@ export default function App() {
   // Filtered rooms for lobby grid
   const filteredRoomsForLobby = rooms.filter((r) => {
     const matchesSearch =
-      r.title.toLowerCase().includes(loungeSearchQuery.toLowerCase()) ||
-      r.streamerName.toLowerCase().includes(loungeSearchQuery.toLowerCase()) ||
-      r.id.toLowerCase().includes(loungeSearchQuery.toLowerCase());
+      r.title.toLowerCase().includes(roomSearchQuery.toLowerCase()) ||
+      r.streamerName.toLowerCase().includes(roomSearchQuery.toLowerCase()) ||
+      r.id.toLowerCase().includes(roomSearchQuery.toLowerCase());
     const matchesCategory =
       selectedCategory === "all" ||
       r.category.toLowerCase() === selectedCategory.toLowerCase();
@@ -1727,7 +1887,16 @@ export default function App() {
               className="w-full py-4 bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 hover:from-purple-500 hover:via-pink-400 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-950 text-white font-black rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)] cursor-pointer"
             >
               <span className="text-base">🚀</span>
-              <span>{isSubmittingAuth ? "প্রবেশ করা হচ্ছে..." : "তাৎক্ষণিক প্রবেশ করুন"}</span>
+              <span>{isSubmittingAuth ? "প্রবেশ করা হচ্ছে..." : "অনলাইন সার্ভারে প্রবেশ করুন"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBypassLogin}
+              className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer border border-amber-400/20"
+            >
+              <span className="text-sm">⚡</span>
+              <span>লোকাল স্যান্ডবক্স মোডে সরাসরি প্রবেশ (Bypass)</span>
             </button>
           </form>
 
@@ -1852,6 +2021,17 @@ export default function App() {
             onAddReaction={handleAddReaction}
             isWebcamActive={isWebcamActive}
             onToggleWebcam={handleToggleWebcam}
+            isBroadcasting={isBroadcasting}
+            setIsBroadcasting={setIsBroadcasting}
+            title={broadcastTitle}
+            setTitle={setBroadcastTitle}
+            category={broadcastCategory}
+            setCategory={setBroadcastCategory}
+            streamType={broadcastStreamType}
+            setStreamType={setBroadcastStreamType}
+            currentLikes={broadcastLikes}
+            setCurrentLikes={setBroadcastLikes}
+            roomId={userId ? `room-${userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "creator"}-${userId.substring(0, 5)}` : "my-custom-studio"}
           />
         ) : activeTab === "all-chat" ? (
           /* B. Global Lounge Chatroom */
@@ -1942,14 +2122,14 @@ export default function App() {
                   <input
                     type="text"
                     placeholder="সদস্যের নাম বা ইউজার আইডি দিয়ে খুঁজুন..."
-                    value={loungeSearchQuery}
-                    onChange={(e) => setLoungeSearchQuery(e.target.value)}
+                    value={memberSearchQuery}
+                    onChange={(e) => setMemberSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-black/60 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/50 transition-all"
                   />
                 </div>
 
                 {/* Members Grid */}
-                {onlineUsers.filter((u) => u.name.toLowerCase().includes(loungeSearchQuery.toLowerCase())).length === 0 ? (
+                {onlineUsers.filter((u) => u.name.toLowerCase().includes(memberSearchQuery.toLowerCase())).length === 0 ? (
                   <div className="text-center py-12 text-white/30">
                     <Users className="w-10 h-10 mx-auto mb-2 opacity-30 text-cyan-500" />
                     <p className="text-xs font-bold">কোনো সক্রিয় মেম্বার পাওয়া যায়নি</p>
@@ -1957,7 +2137,7 @@ export default function App() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {onlineUsers
-                      .filter((u) => u.name.toLowerCase().includes(loungeSearchQuery.toLowerCase()))
+                      .filter((u) => u.name.toLowerCase().includes(memberSearchQuery.toLowerCase()))
                       .map((usr) => {
                         // Active in last 5 minutes
                         const isActiveNow = Date.now() - usr.lastActive < 300000;
@@ -2987,8 +3167,8 @@ export default function App() {
                   <input
                     type="text"
                     placeholder="রুমের নাম বা স্ট্রিমার খুঁজুন..."
-                    value={loungeSearchQuery}
-                    onChange={(e) => setLoungeSearchQuery(e.target.value)}
+                    value={roomSearchQuery}
+                    onChange={(e) => setRoomSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 bg-black/60 border border-white/10 rounded-xl text-xs text-white placeholder-white/30 focus:outline-none focus:border-purple-500/50 transition-all"
                   />
                 </div>
@@ -3270,6 +3450,89 @@ export default function App() {
                   );
                 }}
               />
+
+              {/* Present Viewers / Audience List Section inside Room */}
+              {(() => {
+                const currentRoomAudience = onlineUsers.filter(
+                  (u) => u.currentRoomId === activeRoom.id && (Date.now() - (u.lastActive || 0) < 300000)
+                );
+
+                return (
+                  <div className="bg-[#121422] border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-xl" id="room-viewers-panel">
+                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-teal-400 uppercase tracking-wider">
+                        <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
+                        <span>রুমে আড্ডার মেম্বাররা / Present Viewers ({currentRoomAudience.length})</span>
+                      </div>
+                      <span className="text-[10px] text-white/40">ক্লিক করে গিফট পাঠান ও প্রোফাইল দেখুন</span>
+                    </div>
+
+                    {currentRoomAudience.length === 0 ? (
+                      <p className="text-[11px] text-white/30 italic text-center py-2">
+                        অন্য কোনো শ্রোতা এই মুহূর্তে রুমে নেই
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-3 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-white/10">
+                        {currentRoomAudience.map((usr) => {
+                          const isRecipient = recipientId === usr.id;
+                          return (
+                            <div
+                              key={usr.id}
+                              onClick={() => {
+                                setRecipientId(usr.id);
+                                setRecipientName(usr.name);
+                                setVisitedUser(usr);
+                                if (window.speechSynthesis) {
+                                  try {
+                                    window.speechSynthesis.cancel();
+                                    const utterance = new SpeechSynthesisUtterance(`${usr.name}-কে সিলেক্ট করা হয়েছে`);
+                                    utterance.lang = "bn-BD";
+                                    window.speechSynthesis.speak(utterance);
+                                  } catch (e) {}
+                                }
+                              }}
+                              className={`flex flex-col items-center gap-1 cursor-pointer transition-all duration-200 hover:scale-105 shrink-0 p-1.5 rounded-xl border ${
+                                isRecipient
+                                  ? "bg-teal-500/10 border-teal-500/40 shadow-[0_0_12px_rgba(20,184,166,0.15)]"
+                                  : "bg-black/20 border-transparent hover:bg-white/5"
+                              }`}
+                              style={{ width: "76px" }}
+                            >
+                              <div
+                                className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-black text-white border-2 relative overflow-hidden bg-slate-900"
+                                style={{
+                                  borderColor: usr.avatarColor || "#fff",
+                                }}
+                              >
+                                {usr.photoUrl ? (
+                                  <img
+                                    src={usr.photoUrl}
+                                    alt={usr.name}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  usr.name.substring(0, 2).toUpperCase()
+                                )}
+                                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-500 border border-slate-900 shadow-sm" />
+                              </div>
+                              <span
+                                className="text-[9px] font-extrabold truncate w-full text-center text-slate-200"
+                                style={{ color: usr.avatarColor || "#fff" }}
+                              >
+                                {usr.name}
+                              </span>
+                              <span className="text-[7px] text-white/40 font-mono scale-90 uppercase">
+                                {usr.level || "Bronze"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Upgrade Inline Live Comment Box for Board users */}
               <div className="bg-slate-900/80 backdrop-blur-md border border-purple-500/20 rounded-2xl p-5 flex flex-col gap-4 shadow-xl" id="board-quick-comments">

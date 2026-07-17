@@ -18,6 +18,17 @@ interface CreatorViewProps {
   onAddReaction: (icon: string) => void;
   isWebcamActive: boolean;
   onToggleWebcam: () => void;
+  isBroadcasting: boolean;
+  setIsBroadcasting: (b: boolean) => void;
+  title: string;
+  setTitle: (t: string) => void;
+  category: string;
+  setCategory: (c: string) => void;
+  streamType: "visualizer" | "cyber" | "ambient" | "retro" | "camera";
+  setStreamType: (s: "visualizer" | "cyber" | "ambient" | "retro" | "camera") => void;
+  currentLikes: number;
+  setCurrentLikes: React.Dispatch<React.SetStateAction<number>>;
+  roomId: string;
 }
 
 export default function CreatorView({
@@ -27,19 +38,25 @@ export default function CreatorView({
   onAddReaction,
   isWebcamActive,
   onToggleWebcam,
+  isBroadcasting,
+  setIsBroadcasting,
+  title,
+  setTitle,
+  category,
+  setCategory,
+  streamType,
+  setStreamType,
+  currentLikes,
+  setCurrentLikes,
+  roomId,
 }: CreatorViewProps) {
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [title, setTitle] = useState("🚀 LEVELING UP VIBES — Join the interactive live lounge");
-  const [category, setCategory] = useState("Vibe");
-  const [streamType, setStreamType] = useState<"visualizer" | "cyber" | "ambient" | "retro" | "camera">("cyber");
   const [likeGoal, setLikeGoal] = useState(10000);
-  const [currentLikes, setCurrentLikes] = useState(1480);
   const [broadcastingTime, setBroadcastingTime] = useState(0);
   const [syncedSeats, setSyncedSeats] = useState<MicSeat[] | undefined>(undefined);
 
   // Simulated streamer room object based on configurations
   const mockStreamerRoom: LiveRoom = {
-    id: "my-custom-studio",
+    id: roomId,
     title: title,
     streamerName: userProfile.name,
     streamerAvatar: userProfile.avatarUrl,
@@ -57,8 +74,6 @@ export default function CreatorView({
   // Real-time seats synchronization
   useEffect(() => {
     if (!isBroadcasting) return;
-    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
-    const roomId = `room-${cleanName}`;
     const roomDocRef = doc(db, "rooms", roomId);
 
     const unsub = onSnapshot(roomDocRef, (snap) => {
@@ -68,7 +83,7 @@ export default function CreatorView({
       }
     });
     return () => unsub();
-  }, [isBroadcasting, userProfile.name]);
+  }, [isBroadcasting, roomId]);
 
   // Timer for active broadcast duration
   useEffect(() => {
@@ -76,98 +91,14 @@ export default function CreatorView({
     if (isBroadcasting) {
       interval = setInterval(() => {
         setBroadcastingTime((prev) => prev + 1);
-        // Slowly increment simulated likes
+        // Slowly increment simulated likes locally as fallback or sync driver
         setCurrentLikes((prev) => prev + Math.floor(Math.random() * 8) + 2);
       }, 1000);
     } else {
       setBroadcastingTime(0);
     }
     return () => clearInterval(interval);
-  }, [isBroadcasting]);
-
-  // Synchronize stream with Firestore in real-time (Creation & Deletion only)
-  useEffect(() => {
-    if (!isBroadcasting) return;
-
-    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
-    const roomId = `room-${cleanName}`;
-    const roomDocRef = doc(db, "rooms", roomId);
-
-    const initialSeats = Array.from({ length: 10 }, (_, i) => {
-      if (i === 0) {
-        return {
-          index: 0,
-          userId: userId,
-          userName: userProfile.name,
-          userAvatar: userProfile.avatarUrl || "",
-          userPhotoUrl: userProfile.photoUrl || "",
-          avatarColor: userProfile.avatarColor || "#89ceff",
-          isMutedByHost: false,
-          isMicActive: true,
-          isCameraActive: true,
-          isSpeaking: false,
-          lastActive: Date.now(),
-        };
-      }
-      return {
-        index: i,
-        userId: null,
-        userName: null,
-        userAvatar: null,
-        userPhotoUrl: null,
-        avatarColor: null,
-        isMutedByHost: false,
-        isMicActive: true,
-        isCameraActive: true,
-        isSpeaking: false,
-        lastActive: 0,
-      };
-    });
-
-    const roomObj: LiveRoom = {
-      id: roomId,
-      title: title,
-      streamerName: userProfile.name,
-      streamerAvatar: userProfile.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-      category: category,
-      viewerCount: 1, // Host
-      likeCount: currentLikes,
-      bgGradient: "linear-gradient(135deg, #110033 0%, #330066 50%, #990099 100%)",
-      streamType: streamType,
-      isLive: true,
-      streamerLevel: userProfile.level,
-      streamerLevelValue: userProfile.level === "Legendary" ? 99 : userProfile.level === "Platinum" ? 50 : 25,
-      tags: ["LiveSetup", "RealUser", category],
-      seats: initialSeats,
-      streamerId: userId,
-    };
-
-    setDoc(roomDocRef, roomObj).catch((err) => {
-      console.error("Error creating live room in Firestore:", err);
-    });
-
-    return () => {
-      // Delete the room from Firestore when broadcasting stops
-      deleteDoc(roomDocRef).catch((err) => {
-        console.error("Error deleting live room from Firestore:", err);
-      });
-    };
-  }, [isBroadcasting, title, category, streamType, userProfile.name, userProfile.level, userProfile.avatarUrl, userId]);
-
-  // Dynamic dynamic incremental updates to avoid overwriting or resetting seats
-  useEffect(() => {
-    if (!isBroadcasting) return;
-
-    const cleanName = userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator";
-    const roomId = `room-${cleanName}`;
-    const roomDocRef = doc(db, "rooms", roomId);
-
-    updateDoc(roomDocRef, {
-      likeCount: currentLikes,
-    }).catch((err) => {
-      console.warn("Error updating dynamic like count:", err);
-    });
-  }, [currentLikes, isBroadcasting, userProfile.name]);
+  }, [isBroadcasting, setCurrentLikes]);
 
   // Format elapsed time (MM:SS)
   const formatTime = (seconds: number) => {
@@ -392,7 +323,7 @@ export default function CreatorView({
 
           {/* 1-10 Audio Seats Section */}
           <MicSeatsGrid
-            roomId={`room-${userProfile.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "creator"}`}
+            roomId={roomId}
             seats={syncedSeats}
             userId={userId}
             userProfile={userProfile}
